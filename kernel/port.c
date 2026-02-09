@@ -77,7 +77,7 @@
 //       COUNT (C) = 4
 //
 // Step 4:
-//    Now things become little tricky. Because we're usig arrays, arrays always
+//    Now things become little tricky. Because we're using arrays, arrays always
 //    start at index 0 which makes things just a little more to work with.
 //
 //    Let's say our next byte of data comes in Ex 3
@@ -142,8 +142,7 @@ struct port ports[NPORT];
 
 
 // Initialize the ports
-void 
-port_init(void)
+void port_init(void)
 {
     // Initialize the ports list.  Upon initialization, the following should be
     // true:
@@ -157,7 +156,25 @@ port_init(void)
     // non-kernal ports. Make sure that all ports are empty.
 
     // YOUR CODE HERE
-}
+    for (int i = 0; i < NPORT; i++) {
+        if(i == PORT_CONSOLEIN || i == PORT_CONSOLEOUT || i == PORT_DISKCMD) {
+            ports[i].free = 0; // The Predefined ports in the (port.h) for the kernel
+            ports[i].owner = 0;
+            ports[i].type = PORT_TYPE_KERNEL;
+        }
+        else {
+            ports[i].free = 1; // followed the comments and fill in the ports[i]
+            ports[i].owner = -1;
+            ports[i].type = PORT_TYPE_FREE;
+        }
+        ports[i].head = 0;
+        ports[i].tail = 0;
+        ports[i].count = 0;
+    } 
+
+    }
+
+
 
 
 // Close the port.
@@ -168,6 +185,19 @@ port_close(int port)
     // if it is open, we empty its contents and mark it as free.
 
     // YOUR CODE HERE
+
+    if (port < 0 || port >= NPORT || ports[port].free) {
+        return;
+    }
+
+    else {
+    ports[port].free = 1;
+    ports[port].type = PORT_TYPE_FREE;
+    ports[port].owner = -1;
+    ports[port].head = 0;
+    ports[port].tail = 0;
+    ports[port].count = 0;
+     }
 }
 
 
@@ -185,8 +215,30 @@ port_acquire(int port, procid_t proc_id)
     // If this operation fails, return -1.
 
     // YOUR CODE HERE
-    
-    return -1;
+    if (port == -1) { // if the port number is able to allocate to the next free port i think.
+        for (int i = 0; i < NPORT; i++) {
+            if(ports[i].free == 1) {
+                port = i;
+                break;
+            }
+        }
+
+    if (port == -1) return -1;
+    } 
+    else {
+        if (port < 0 || port >= NPORT || ports[port].free == 0){
+            return -1;
+        }
+    }    
+
+    ports[port].free = 0;
+    ports[port].owner = proc_id;
+    // ports[port].type = PORT_TYPE_FREE; 
+    // ports[port].head = 0;
+    // ports[port].tail = 0;
+    // ports[port].count = 0;
+
+    return port;
 }
 
 
@@ -201,7 +253,26 @@ port_write(int port, char *buf, int n)
     // write it.
 
     // YOUR CODE HERE
-    return -1;
+    if (port < 0 || port >= NPORT || ports[port].free) {
+        return -1;
+    }
+
+    int written_bytes = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (ports[port].count == PORT_BUF_SIZE) {
+            break; // My buffer ends up being full and so we stop here 
+        }
+
+        ports[port].buffer[ports[port].head] = buf[i]; // write the byte to the buffer at the head position
+        ports[port].head = (ports[port].head + 1) % PORT_BUF_SIZE; // we move the head forward in the buffer
+    
+    
+        ports[port].count++; // Increment the count of bytes
+        written_bytes++;
+    }
+
+    return written_bytes;
 }
 
 
@@ -217,5 +288,23 @@ port_read(int port, char *buf, int n)
 
     // YOUR CODE HERE
 
+ if(port < 0 || port >= NPORT || ports[port].free) {
     return -1;
+ }
+
+  int read_bytes = 0;
+
+  for(int i = 0; i < n; i++) {
+    if(ports[port].count == 0) {
+        break; // this shows that no more data shown and exhausted.
+    }
+
+    buf[i] = ports[port].buffer[ports[port].tail]; // reads byte at the tail position
+    
+    ports[port].tail = (ports[port].tail + 1) % PORT_BUF_SIZE; // move the tail along
+
+    ports[port].count--; // Decrement
+    read_bytes++;
+  }
+    return read_bytes;
 }
